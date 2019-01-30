@@ -40,6 +40,42 @@
 (defun vcard-mode-init ()
   (set (make-local-variable 'paragraph-start) "BEGIN:VCARD"))
 
+(defun vcard-lookup-coding-system ()
+  "Look for a 'CHARSET=' attribute, and return the corresponding `coding-system'.
+Return nil if none is found."
+  (save-excursion
+    (let ((end (line-end-position)))
+      (beginning-of-line)
+      (if (re-search-forward ";CHARSET=\\(.*?\\)[;:]" end t)
+          (coding-system-from-name (match-string 1))))))
+
+(defun vcard-decode-buffer ()
+  "Decode property values, if attribute 'ENCODING=QUOTED-PRINTABLE' is defined.
+Maybe used in `vcard-mode-hook'"
+  (save-excursion
+    (goto-char (point-min))
+    (while (search-forward ";ENCODING=QUOTED-PRINTABLE" nil t)
+      (let* ((end (line-end-position))
+             (start (search-forward ":" end t))
+             (charset (vcard-lookup-coding-system)))
+        (quoted-printable-decode-region start end)
+        (if charset
+            (decode-coding-region start end charset))))))
+
+(defun vcard-encode-buffer ()
+  (interactive)
+  "Encode property values, if attribute 'ENCODING=QUOTED-PRINTABLE' is defined."
+  (save-excursion
+    (goto-char (point-min))
+    (while (search-forward ";ENCODING=QUOTED-PRINTABLE" nil t)
+      (let* ((end (line-end-position))
+             (start (search-forward ":" end t))
+             (charset (vcard-lookup-coding-system)))
+        (if charset
+            (encode-coding-region start end charset))
+        (quoted-printable-encode-region start end))))
+  nil)
+
 ;;;###autoload
 (define-generic-mode vcard-mode
   '()
@@ -50,6 +86,11 @@
   '("\\.\\(vcf\\|vcard\\)\\'")
   '(vcard-mode-init)
   "Generic mode for vCard files.")
+
+(defcustom vcard-mode-hook nil
+  "*Hook called by `vcard-mode'."
+  :type 'hook
+  :group 'vcard)
 
 (provide 'vcard-mode)
 
